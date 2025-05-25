@@ -10,7 +10,7 @@
                 <h3 class="mb-0">Login</h3>
             </div>
             <div class="card-body">
-                <form method="post" id="login-form">
+                <form method="post" id="login-form" autocomplete="off">
                     {% csrf_token %}
                     
                     {% if form.non_field_errors %}
@@ -35,7 +35,7 @@
                     
                     <div class="mb-3">
                         <label for="id_password" class="form-label">Password</label>
-                        <input type="password" name="password" id="id_password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" required>
+                        <input type="password" name="password" id="id_password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" required>
                         {% if form.password.errors %}
                         <div class="invalid-feedback">
                             {% for error in form.password.errors %}
