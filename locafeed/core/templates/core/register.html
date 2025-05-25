@@ -1,0 +1,137 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Register - LocaFeed{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">Register</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" id="register-form">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username</label>
+                        <input type="text" name="username" id="id_username" class="form-control {% if form.username.errors %}is-invalid{% endif %}" required>
+                        {% if form.username.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.username.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_email" class="form-label">Email</label>
+                        <input type="email" name="email" id="id_email" class="form-control {% if form.email.errors %}is-invalid{% endif %}">
+                        {% if form.email.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.email.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password1" class="form-label">Password</label>
+                        <input type="password" name="password1" id="id_password1" class="form-control {% if form.password1.errors %}is-invalid{% endif %}" required>
+                        {% if form.password1.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.password1.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="form-text">
+                            Your password must be at least 8 characters long and contain letters and numbers.
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password2" class="form-label">Confirm Password</label>
+                        <input type="password" name="password2" id="id_password2" class="form-control {% if form.password2.errors %}is-invalid{% endif %}" required>
+                        {% if form.password2.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.password2.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Register</button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center">
+                <p class="mb-0">Already have an account? <a href="{% url 'login' %}">Login</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Client-side validation
+        $("#register-form").on("submit", function(e) {
+            let isValid = true;
+            const username = $("#id_username").val().trim();
+            const email = $("#id_email").val().trim();
+            const password1 = $("#id_password1").val();
+            const password2 = $("#id_password2").val();
+            
+            if (!username) {
+                $("#id_username").addClass("is-invalid");
+                isValid = false;
+            } else {
+                $("#id_username").removeClass("is-invalid");
+            }
+            
+            if (email && !isValidEmail(email)) {
+                $("#id_email").addClass("is-invalid");
+                isValid = false;
+            } else {
+                $("#id_email").removeClass("is-invalid");
+            }
+            
+            if (!password1 || password1.length < 8) {
+                $("#id_password1").addClass("is-invalid");
+                isValid = false;
+            } else {
+                $("#id_password1").removeClass("is-invalid");
+            }
+            
+            if (!password2 || password1 !== password2) {
+                $("#id_password2").addClass("is-invalid");
+                isValid = false;
+            } else {
+                $("#id_password2").removeClass("is-invalid");
+            }
+            
+            return isValid;
+        });
+        
+        function isValidEmail(email) {
+            const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return regex.test(email);
+        }
+    });
+</script>
+{% endblock %}
