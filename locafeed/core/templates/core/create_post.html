@@ -1,0 +1,324 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Create Post - LocaFeed{% endblock %}
+
+{% block extra_css %}
+<style>
+    .compose-card {
+        border: 1px solid #e6ecf0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background-color: white;
+    }
+    .compose-textarea {
+        border: 1px solid #e6ecf0;
+        border-radius: 8px;
+        resize: none;
+        width: 100%;
+        font-size: 1.1rem;
+        margin-bottom: 10px;
+        padding: 15px;
+        min-height: 120px;
+    }
+    .compose-textarea:focus {
+        outline: none;
+        border-color: #1DA1F2;
+        box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.2);
+    }
+    .character-count {
+        color: #657786;
+        font-size: 0.9rem;
+        font-weight: bold;
+    }
+    .character-count.warning {
+        color: #ffad1f;
+    }
+    .character-count.danger {
+        color: #e0245e;
+    }
+    .post-button {
+        border-radius: 20px;
+        font-weight: bold;
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+    #map {
+        height: 300px;
+        width: 100%;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    .location-display {
+        border: 1px solid #e6ecf0;
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 15px;
+        background-color: #f8f9fa;
+    }
+    .location-icon {
+        color: #1DA1F2;
+        margin-right: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Create New Post</h4>
+                </div>
+                <div class="card-body">
+                    <form id="post-form" method="post" action="{% url 'create_post' %}">
+                        {% csrf_token %}
+                        
+                        {% if messages %}
+                        <div class="messages mb-3">
+                            {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }}" role="alert">
+                                {{ message }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label for="post-text" class="form-label">What's happening?</label>
+                            <textarea id="post-text" name="text" class="compose-textarea" placeholder="Share your thoughts..." maxlength="140" required></textarea>
+                            <div class="d-flex justify-content-between">
+                                <span class="form-text">Maximum 140 characters</span>
+                                <span class="character-count">140</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Location (required)</label>
+                            <div id="map"></div>
+                            <div class="location-display" id="location-display">
+                                <i class="bi bi-geo-alt location-icon"></i>
+                                <span id="location-name-display">No location selected</span>
+                            </div>
+                            <div class="form-text">Click on the map to select a location or search below</div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="location-search" placeholder="Search for a location">
+                                <button class="btn btn-outline-secondary" type="button" id="search-button">Search</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Hidden fields for location data -->
+                        <input type="hidden" name="location_name" id="location_name">
+                        <input type="hidden" name="latitude" id="latitude">
+                        <input type="hidden" name="longitude" id="longitude">
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary post-button" disabled>Post</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Character counter
+        const textArea = $('#post-text');
+        const charCount = $('.character-count');
+        const postButton = $('.post-button');
+        
+        textArea.on('input', function() {
+            const remaining = 140 - $(this).val().length;
+            charCount.text(remaining);
+            
+            if (remaining < 0) {
+                charCount.removeClass('warning').addClass('danger');
+                postButton.prop('disabled', true);
+            } else if (remaining < 20) {
+                charCount.removeClass('danger').addClass('warning');
+                postButton.prop('disabled', false);
+            } else {
+                charCount.removeClass('danger warning');
+                postButton.prop('disabled', $(this).val().length === 0 || !$('#location_name').val());
+            }
+            
+            // Check if location is selected
+            if ($(this).val().length > 0 && $('#location_name').val()) {
+                postButton.prop('disabled', false);
+            }
+        });
+        
+        // Initialize the map
+        let map = L.map('map').setView([0, 0], 2);
+        let marker;
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Try to get user's location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                const userLat = position.coords.latitude;
+                const userLng = position.coords.longitude;
+                
+                map.setView([userLat, userLng], 13);
+                
+                if (marker) {
+                    marker.setLatLng([userLat, userLng]);
+                } else {
+                    marker = L.marker([userLat, userLng], {draggable: true}).addTo(map);
+                    
+                    // Update location on marker drag
+                    marker.on('dragend', function(event) {
+                        const position = marker.getLatLng();
+                        reverseGeocode(position.lat, position.lng);
+                    });
+                }
+                
+                // Reverse geocode to get location name
+                reverseGeocode(userLat, userLng);
+            });
+        }
+        
+        // Add click event to the map
+        map.on('click', function(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+            
+            if (marker) {
+                marker.setLatLng([lat, lng]);
+            } else {
+                marker = L.marker([lat, lng], {draggable: true}).addTo(map);
+                
+                // Update location on marker drag
+                marker.on('dragend', function(event) {
+                    const position = marker.getLatLng();
+                    reverseGeocode(position.lat, position.lng);
+                });
+            }
+            
+            // Reverse geocode to get location name
+            reverseGeocode(lat, lng);
+        });
+        
+        // Function to reverse geocode (get location name from coordinates)
+        function reverseGeocode(lat, lng) {
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+                .then(response => response.json())
+                .then(data => {
+                    const locationName = data.display_name || `Location at ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                    
+                    // Update hidden fields
+                    $('#location_name').val(locationName);
+                    $('#latitude').val(lat);
+                    $('#longitude').val(lng);
+                    
+                    // Update display
+                    $('#location-name-display').text(locationName);
+                    
+                    // Enable post button if text is not empty
+                    if (textArea.val().length > 0) {
+                        postButton.prop('disabled', false);
+                    }
+                    
+                    // Update marker popup
+                    if (marker) {
+                        marker.bindPopup(locationName).openPopup();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error during reverse geocoding:', error);
+                    const locationName = `Location at ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                    
+                    // Update hidden fields
+                    $('#location_name').val(locationName);
+                    $('#latitude').val(lat);
+                    $('#longitude').val(lng);
+                    
+                    // Update display
+                    $('#location-name-display').text(locationName);
+                    
+                    // Enable post button if text is not empty
+                    if (textArea.val().length > 0) {
+                        postButton.prop('disabled', false);
+                    }
+                    
+                    // Update marker popup
+                    if (marker) {
+                        marker.bindPopup(locationName).openPopup();
+                    }
+                });
+        }
+        
+        // Search for location
+        $('#search-button').on('click', searchLocation);
+        $('#location-search').on('keypress', function(e) {
+            if (e.which === 13) { // Enter key
+                e.preventDefault();
+                searchLocation();
+            }
+        });
+        
+        function searchLocation() {
+            const query = $('#location-search').val();
+            
+            if (query) {
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.length > 0) {
+                            const result = data[0];
+                            const lat = parseFloat(result.lat);
+                            const lng = parseFloat(result.lon);
+                            
+                            map.setView([lat, lng], 13);
+                            
+                            if (marker) {
+                                marker.setLatLng([lat, lng]);
+                            } else {
+                                marker = L.marker([lat, lng], {draggable: true}).addTo(map);
+                                
+                                // Update location on marker drag
+                                marker.on('dragend', function(event) {
+                                    const position = marker.getLatLng();
+                                    reverseGeocode(position.lat, position.lng);
+                                });
+                            }
+                            
+                            // Update hidden fields
+                            $('#location_name').val(result.display_name);
+                            $('#latitude').val(lat);
+                            $('#longitude').val(lng);
+                            
+                            // Update display
+                            $('#location-name-display').text(result.display_name);
+                            
+                            // Enable post button if text is not empty
+                            if (textArea.val().length > 0) {
+                                postButton.prop('disabled', false);
+                            }
+                            
+                            marker.bindPopup(result.display_name).openPopup();
+                        } else {
+                            alert('No results found for this location.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error during location search:', error);
+                        alert('Error searching for location. Please try again.');
+                    });
+            }
+        }
+    });
+</script>
+{% endblock %}

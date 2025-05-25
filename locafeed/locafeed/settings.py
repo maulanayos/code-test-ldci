@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.UserSessionMiddleware',  # Custom middleware to track user sessions
 ]
 
 ROOT_URLCONF = 'locafeed.urls'
@@ -81,6 +83,13 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Configure sessions to be stored in the database
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 86400  # 24 hours in seconds
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_SAVE_EVERY_REQUEST = True  # Update the session on every request
 
 
 # Password validation
@@ -143,9 +152,10 @@ REST_FRAMEWORK = {
 
 # Knox settings
 REST_KNOX = {
-    'TOKEN_TTL': None,  # Tokens never expire
-    'TOKEN_LIMIT_PER_USER': None,  # Unlimited tokens per user
+    'TOKEN_TTL': timedelta(hours=24),  # Tokens expire after 24 hours
+    'TOKEN_LIMIT_PER_USER': 5,  # Limit to 5 tokens per user
     'AUTO_REFRESH': True,
+    'USER_SERIALIZER': 'core.serializers.UserSerializer',
 }
 
 # Login redirect URL

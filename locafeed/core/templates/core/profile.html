@@ -1,0 +1,248 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Profile - LocaFeed{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-header {
+        background-color: #1DA1F2;
+        height: 150px;
+        border-radius: 8px 8px 0 0;
+    }
+    .profile-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background-color: #ffffff;
+        color: #1DA1F2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        font-weight: bold;
+        border: 4px solid #ffffff;
+        margin-top: -60px;
+        margin-left: 30px;
+        position: relative;
+    }
+    .profile-avatar-upload {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        background-color: #f8f9fa;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .profile-avatar-upload:hover {
+        background-color: #e9ecef;
+    }
+    .profile-info {
+        padding: 20px;
+    }
+    .profile-username {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+    .profile-stats {
+        display: flex;
+        margin: 15px 0;
+    }
+    .stat-item {
+        margin-right: 20px;
+    }
+    .stat-value {
+        font-weight: bold;
+    }
+    .stat-label {
+        color: #657786;
+        font-size: 0.9rem;
+    }
+    .tab-content {
+        padding: 20px 0;
+    }
+    .form-check-input:checked {
+        background-color: #1DA1F2;
+        border-color: #1DA1F2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm mb-4">
+                <!-- Profile Header -->
+                <div class="profile-header"></div>
+                
+                <div class="profile-avatar">
+                    {{ user.username|first|upper }}
+                    <form id="avatar-form" method="post" enctype="multipart/form-data" style="display: none;">
+                        {% csrf_token %}
+                        <input type="file" id="profile_picture" name="profile_picture" accept="image/*">
+                    </form>
+                    <div class="profile-avatar-upload" title="Upload profile picture">
+                        <i class="bi bi-camera"></i>
+                    </div>
+                </div>
+                
+                <div class="profile-info">
+                    <div class="profile-username">{{ user.username }}</div>
+                    <div class="text-muted">@{{ user.username }}</div>
+                    
+                    <div class="profile-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">{{ user.posts.count }}</div>
+                            <div class="stat-label">Posts</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">{{ user.profile.created_at|date:"M Y" }}</div>
+                            <div class="stat-label">Joined</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Profile Tabs -->
+                    <ul class="nav nav-tabs" id="profileTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="edit-tab" data-bs-toggle="tab" data-bs-target="#edit" type="button" role="tab" aria-controls="edit" aria-selected="true">Edit Profile</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="posts-tab" data-bs-toggle="tab" data-bs-target="#posts" type="button" role="tab" aria-controls="posts" aria-selected="false">My Posts</button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="profileTabsContent">
+                        <!-- Edit Profile Tab -->
+                        <div class="tab-pane fade show active" id="edit" role="tabpanel" aria-labelledby="edit-tab">
+                            <form method="post" action="{% url 'profile' %}">
+                                {% csrf_token %}
+                                
+                                {% if messages %}
+                                <div class="messages mb-3">
+                                    {% for message in messages %}
+                                    <div class="alert alert-{{ message.tags }}" role="alert">
+                                        {{ message }}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                
+                                <div class="mb-3">
+                                    <label for="bio" class="form-label">Bio</label>
+                                    <textarea class="form-control" id="bio" name="bio" rows="3">{{ user.profile.bio|default:'' }}</textarea>
+                                    <div class="form-text">Tell us a little about yourself</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="date_of_birth" class="form-label">Date of Birth</label>
+                                    <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" value="{{ user.profile.date_of_birth|date:'Y-m-d' }}">
+                                </div>
+                                
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" id="is_private" name="is_private" {% if user.profile.is_private %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_private">Private profile</label>
+                                    <div class="form-text">Only allow followers to see your posts</div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                            </form>
+                        </div>
+                        
+                        <!-- My Posts Tab -->
+                        <div class="tab-pane fade" id="posts" role="tabpanel" aria-labelledby="posts-tab">
+                            {% if user.posts.all %}
+                                {% for post in user.posts.all %}
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <div class="d-flex">
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <div>
+                                                        <span class="fw-bold">{{ user.username }}</span>
+                                                        <span class="text-muted">· {{ post.created_at|timesince }} ago</span>
+                                                    </div>
+                                                    <div class="dropdown">
+                                                        <button class="btn btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                            <i class="bi bi-three-dots"></i>
+                                                        </button>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li><a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#deletePostModal{{ post.id }}">Delete</a></li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                                <p>{{ post.text }}</p>
+                                                {% if post.location %}
+                                                <div class="text-primary">
+                                                    <a href="{% url 'map_with_post' post.id %}" class="text-decoration-none">
+                                                        <i class="bi bi-geo-alt"></i> {{ post.location.name }}
+                                                    </a>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Delete Post Modal -->
+                                <div class="modal fade" id="deletePostModal{{ post.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Delete Post</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>Are you sure you want to delete this post? This action cannot be undone.</p>
+                                                <p class="border-start border-danger border-3 ps-3 mt-3">{{ post.text }}</p>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <form method="post" action="{% url 'post-detail' post.id %}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="_method" value="DELETE">
+                                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center py-5">
+                                    <p class="text-muted">You haven't posted anything yet.</p>
+                                    <a href="{% url 'create_post' %}" class="btn btn-primary">Create Your First Post</a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Handle profile picture upload
+        $('.profile-avatar-upload').on('click', function() {
+            $('#profile_picture').click();
+        });
+        
+        $('#profile_picture').on('change', function() {
+            if (this.files && this.files[0]) {
+                // Automatically submit the form when a file is selected
+                $('#avatar-form').submit();
+            }
+        });
+    });
+</script>
+{% endblock %}

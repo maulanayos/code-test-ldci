@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 class Location(models.Model):
     name = models.CharField(max_length=255)
@@ -44,4 +45,29 @@ class Post(models.Model):
     def get_absolute_url(self):
         return reverse('post_detail', kwargs={'pk': self.pk})
 
-# Create your models here.
+class UserSession(models.Model):
+    """Model to track user session information"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    session_key = models.CharField(max_length=40, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    device_type = models.CharField(max_length=20, null=True, blank=True)  # mobile, tablet, desktop
+    browser = models.CharField(max_length=50, null=True, blank=True)
+    os = models.CharField(max_length=50, null=True, blank=True)
+    login_time = models.DateTimeField(default=timezone.now)
+    logout_time = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    location_country = models.CharField(max_length=100, null=True, blank=True)
+    location_city = models.CharField(max_length=100, null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-login_time']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.login_time}"
+    
+    def mark_inactive(self):
+        """Mark the session as inactive when user logs out"""
+        self.is_active = False
+        self.logout_time = timezone.now()
+        self.save()

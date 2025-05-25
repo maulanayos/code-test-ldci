@@ -28,13 +28,26 @@ def login_view(request):
             password = form.cleaned_data.get('password')
             user = authenticate(username=username, password=password)
             if user is not None:
+                # Login the user
                 login(request, user)
+                
+                # Session is created automatically by the middleware
+                
                 messages.success(request, f'Welcome back, {username}!')
-                return redirect('dashboard')
+                
+                # Get redirect URL or go to dashboard
+                next_url = request.GET.get('next', 'dashboard')
+                return redirect(next_url)
             else:
                 messages.error(request, 'Invalid username or password.')
         else:
-            messages.error(request, 'Invalid username or password.')
+            # Detailed error message to help users understand the issue
+            if 'username' in form.errors:
+                messages.error(request, f'Username error: {form.errors["username"][0]}')
+            elif 'password' in form.errors:
+                messages.error(request, f'Password error: {form.errors["password"][0]}')
+            else:
+                messages.error(request, 'Invalid username or password. Please try again.')
     else:
         form = AuthenticationForm()
     
@@ -61,8 +74,13 @@ def register_view(request):
 
 def logout_view(request):
     """Logout view"""
+    # The session marking as inactive is handled by the middleware
+    # when it detects a logout request
+    
+    # Standard Django logout
     logout(request)
-    messages.info(request, 'You have been logged out.')
+    
+    messages.info(request, 'You have been logged out successfully.')
     return redirect('login')
 
 
@@ -140,11 +158,17 @@ def create_post_view(request):
 @login_required
 def map_view(request, post_id=None):
     """Map view with post location"""
-    post = None
     if post_id:
+        # Get specific post and center the map on it
         post = get_object_or_404(Post, id=post_id)
+        posts = [post]
+        center_post = post
+    else:
+        # Get all posts with locations
+        posts = Post.objects.filter(location__isnull=False).order_by('-created_at')
+        center_post = None
     
-    context = {'post': post}
+    context = {'posts': posts, 'center_post': center_post}
     return render(request, 'core/map.html', context)
 
 
