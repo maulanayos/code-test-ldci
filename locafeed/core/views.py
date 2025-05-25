@@ -114,27 +114,28 @@ def create_post_view(request):
         location_name = request.POST.get('location_name')
         latitude = request.POST.get('latitude')
         longitude = request.POST.get('longitude')
+        location_text = request.POST.get('location_text')
         
         # Validate post text (max 140 characters)
         if not text:
             messages.error(request, 'Post text is required.')
-            return redirect('create_post')
+            return render(request, 'core/create_post_new.html')
             
         if len(text) > 140:
             messages.error(request, 'Post text must be 140 characters or less.')
-            return redirect('create_post')
+            return render(request, 'core/create_post_new.html')
         
         # Validate location data
         if not all([location_name, latitude, longitude]):
-            messages.error(request, 'Location information is required.')
-            return redirect('create_post')
+            messages.error(request, 'Please add a location using the @ symbol (e.g., @Raja Ampat).')
+            return render(request, 'core/create_post_new.html')
             
         try:
             latitude = float(latitude)
             longitude = float(longitude)
         except ValueError:
             messages.error(request, 'Invalid location coordinates.')
-            return redirect('create_post')
+            return render(request, 'core/create_post_new.html')
         
         # Create or get location
         location, created = Location.objects.get_or_create(
@@ -152,7 +153,7 @@ def create_post_view(request):
         messages.success(request, 'Post created successfully!')
         return redirect('dashboard')
     
-    return render(request, 'core/create_post.html')
+    return render(request, 'core/create_post_new.html')
 
 
 @login_required

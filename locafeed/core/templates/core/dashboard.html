@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load core_filters %}
 
 {% block title %}Dashboard - LocaFeed{% endblock %}
 
@@ -171,19 +172,27 @@
                     <div class="post-avatar me-3">
                         {{ user.username|first|upper }}
                     </div>
-                    <textarea name="text" class="compose-textarea" placeholder="What's happening?" maxlength="140" required></textarea>
+                    <div class="position-relative flex-grow-1">
+                        <textarea id="post-text" name="text" class="compose-textarea" placeholder="What's happening? Type @ to tag a location" maxlength="140" required></textarea>
+                        <!-- Location dropdown will appear here when @ is typed -->
+                        <div id="location-dropdown" class="location-dropdown" style="position: absolute; display: none;"></div>
+                    </div>
+                </div>
+                
+                <div class="text-helper mb-2 small text-muted">
+                    <i class="bi bi-info-circle"></i> Type @ to tag a location (e.g., @Raja Ampat)
                 </div>
                 
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <!-- Location input - clicking this would open a map modal -->
-                        <button type="button" class="btn location-input" data-bs-toggle="modal" data-bs-target="#locationModal">
-                            <i class="bi bi-geo-alt"></i> Add location
-                        </button>
                         <!-- Hidden fields for location data -->
                         <input type="hidden" name="location_name" id="location_name">
                         <input type="hidden" name="latitude" id="latitude">
                         <input type="hidden" name="longitude" id="longitude">
+                        <input type="hidden" name="location_text" id="location_text">
+                        
+                        <!-- Small map preview when location is selected -->
+                        <div id="small-map-preview" class="small-map-preview mt-2" style="display: none; height: 100px; width: 100%; border-radius: 8px;"></div>
                     </div>
                     <div class="d-flex align-items-center">
                         <span class="character-count me-3">140</span>
@@ -223,21 +232,31 @@
                                 <span class="post-time">· {{ post.created_at|timesince }} ago</span>
                             </div>
                             <div class="post-content">
-                                {{ post.text }}
+                                {% with text=post.text %}
+                                    {% if '@' in text and post.location %}
+                                        {% with location_tag='@'|add:post.location.name %}
+                                            {% if location_tag in text %}
+                                                {{ text|split:location_tag|first }}
+                                                <a href="{% url 'map_with_post' post.id %}" class="location-tag">
+                                                    <i class="bi bi-geo-alt"></i>@{{ post.location.name|truncate_location }}
+                                                </a>
+                                                {{ text|split:location_tag|last }}
+                                            {% else %}
+                                                {{ text }}
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        {{ text }}
+                                    {% endif %}
+                                {% endwith %}
+                                <div class="small text-muted mt-2">{{ post.created_at|date:"F j, Y g:i A" }}</div>
                             </div>
-                            {% if post.location %}
-                            <div class="post-location mb-2">
-                                <a href="{% url 'map_with_post' post.id %}" class="text-decoration-none">
-                                    <i class="bi bi-geo-alt"></i> {{ post.location.name }}
-                                </a>
-                            </div>
-                            {% endif %}
-                            <div class="post-actions">
+                            <!-- <div class="post-actions">
                                 <div class="post-action"><i class="bi bi-chat"></i> Comment</div>
                                 <div class="post-action"><i class="bi bi-repeat"></i> Repost</div>
                                 <div class="post-action"><i class="bi bi-heart"></i> Like</div>
                                 <div class="post-action"><i class="bi bi-share"></i> Share</div>
-                            </div>
+                            </div> -->
                         </div>
                     </div>
                 </div>
@@ -315,14 +334,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
+                <div class="input-group mb-3">
                     <input type="text" class="form-control" id="location-search" placeholder="Search for a location">
+                    <button class="btn btn-outline-secondary" type="button" id="search-button">Search</button>
                 </div>
                 <div id="location-map" style="height: 400px;"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="select-location" data-bs-dismiss="modal">Select Location</button>
+            <div class="modal-footer d-flex justify-content-between">
+                <div id="selected-location-display" class="text-primary"></div>
+                <div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="select-location">Add Location</button>
+                </div>
             </div>
         </div>
     </div>
@@ -333,10 +356,23 @@
 <script>
     $(document).ready(function() {
         // Character counter
-        const textArea = $('.compose-textarea');
+        const textArea = $('#post-text');
         const charCount = $('.character-count');
         const postButton = $('.post-button');
         
+        // Location variables
+        let locationMap;
+        let smallMapPreview;
+        let locationMarker;
+        let selectedLocation = null;
+        let locationTagStart = -1;
+        let locationTagEnd = -1;
+        let atSymbolPosition = -1;
+        
+        // Initialize the location dropdown
+        const locationDropdown = $('#location-dropdown');
+        
+        // Character counter functionality
         textArea.on('input', function() {
             const remaining = 140 - $(this).val().length;
             charCount.text(remaining);
@@ -349,18 +385,228 @@
                 postButton.prop('disabled', false);
             } else {
                 charCount.removeClass('danger warning');
-                postButton.prop('disabled', $(this).val().length === 0 || !$('#location_name').val());
+                postButton.prop('disabled', $(this).val().length === 0);
             }
+            
+            // Check for @ symbol to trigger location dropdown
+            checkForLocationTag($(this).val(), $(this)[0].selectionStart);
         });
+        
+        // Monitor cursor position to detect @ symbol
+        textArea.on('keyup click focus', function(e) {
+            checkForLocationTag($(this).val(), $(this)[0].selectionStart);
+        });
+        
+        // Function to check for @ symbol and location tags
+        function checkForLocationTag(text, cursorPosition) {
+            // Only search if we're not already in a location tag
+            if (locationTagStart === -1 || cursorPosition < locationTagStart || cursorPosition > locationTagEnd) {
+                // Reset location tag positions
+                locationTagStart = -1;
+                locationTagEnd = -1;
+                
+                // Look for @ symbol before cursor
+                let searchText = text.substring(0, cursorPosition);
+                atSymbolPosition = searchText.lastIndexOf('@');
+                
+                // If @ found and it's at the beginning or has a space before it
+                if (atSymbolPosition !== -1 && (atSymbolPosition === 0 || searchText[atSymbolPosition - 1] === ' ')) {
+                    // Get text after @ up to cursor
+                    const locationQuery = searchText.substring(atSymbolPosition + 1);
+                    
+                    // Only show dropdown if we have at least 1 character after @
+                    if (locationQuery.length > 0) {
+                        // Show location dropdown with search suggestions
+                        showLocationDropdown(locationQuery);
+                    } else {
+                        locationDropdown.hide();
+                    }
+                } else {
+                    locationDropdown.hide();
+                }
+            }
+        }
+        
+        // Function to show location dropdown with suggestions
+        function showLocationDropdown(query) {
+            // Simple predefined locations for demo - in production would use an API
+            const predefinedLocations = [
+                { name: 'Raja Ampat', lat: -0.5, lng: 130.5 },
+                { name: 'Bali', lat: -8.4095, lng: 115.1889 },
+                { name: 'Jakarta', lat: -6.2088, lng: 106.8456 },
+                { name: 'Yogyakarta', lat: -7.7956, lng: 110.3695 },
+                { name: 'Bandung', lat: -6.9175, lng: 107.6191 }
+            ];
+            
+            // Filter locations based on query
+            const filteredLocations = predefinedLocations.filter(loc => 
+                loc.name.toLowerCase().includes(query.toLowerCase())
+            );
+            
+            // Clear previous results
+            locationDropdown.empty();
+            locationDropdown.css({
+                'position': 'absolute',
+                'width': textArea.width() + 'px',
+                'top': textArea.height() + 10 + 'px',
+                'left': '0',
+                'max-height': '200px',
+                'overflow-y': 'auto',
+                'border': '1px solid #e6ecf0',
+                'border-radius': '8px',
+                'background-color': 'white',
+                'box-shadow': '0 2px 10px rgba(0, 0, 0, 0.1)',
+                'z-index': '1000'
+            });
+            
+            if (filteredLocations.length > 0) {
+                // Add option to search more locations
+                locationDropdown.append(`
+                    <div class="p-2 border-bottom" data-action="search-more">
+                        <i class="bi bi-search"></i> Search for "${query}" on map...
+                    </div>
+                `);
+                
+                // Add filtered locations
+                filteredLocations.forEach(loc => {
+                    // Truncate location name for display
+                    let displayName = loc.name;
+                    const parts = loc.name.split(',');
+                    if (parts.length > 2) {
+                        displayName = parts.slice(0, 2).join(',') + '...';
+                    }
+                    
+                    locationDropdown.append(`
+                        <div class="p-2 border-bottom location-option" data-name="${loc.name}" data-lat="${loc.lat}" data-lng="${loc.lng}">
+                            <i class="bi bi-geo-alt"></i> ${displayName}
+                        </div>
+                    `);
+                });
+                
+                // Show dropdown
+                locationDropdown.show();
+                
+                // Attach click handlers to location options
+                $('.location-option').on('click', function() {
+                    // Select this location
+                    selectLocation({
+                        name: $(this).data('name'),
+                        latitude: $(this).data('lat'),
+                        longitude: $(this).data('lng')
+                    });
+                });
+                
+                // Attach click handler to search more option
+                $('[data-action="search-more"]').on('click', function() {
+                    // Open location modal
+                    $('#locationModal').modal('show');
+                    $('#location-search').val(query);
+                });
+            } else {
+                // No matches, show search option
+                locationDropdown.append(`
+                    <div class="p-2 border-bottom" data-action="search-more">
+                        <i class="bi bi-search"></i> Search for "${query}" on map...
+                    </div>
+                `);
+                
+                locationDropdown.show();
+                
+                // Attach click handler
+                $('[data-action="search-more"]').on('click', function() {
+                    // Open location modal
+                    $('#locationModal').modal('show');
+                    $('#location-search').val(query);
+                });
+            }
+        }
+        
+        // Function to select a location and insert it into the text
+        function selectLocation(location) {
+            // Store selected location
+            selectedLocation = location;
+            
+            // Update hidden fields
+            $('#location_name').val(location.name);
+            $('#latitude').val(location.latitude);
+            $('#longitude').val(location.longitude);
+            
+            // Get current text and cursor position
+            const text = textArea.val();
+            const cursorPos = textArea[0].selectionStart;
+            
+            // Find end of the location text (space or end of text)
+            const textAfterAt = text.substring(atSymbolPosition);
+            const nextSpacePos = textAfterAt.indexOf(' ');
+            const endPos = nextSpacePos !== -1 ? 
+                           atSymbolPosition + nextSpacePos : 
+                           text.length;
+            
+            // Calculate what text to replace
+            const beforeText = text.substring(0, atSymbolPosition);
+            const afterText = text.substring(endPos);
+            
+            // Create new text with location
+            const newText = beforeText + '@' + location.name + afterText;
+            
+            // Update text area
+            textArea.val(newText);
+            
+            // Store the location tag positions
+            locationTagStart = atSymbolPosition;
+            locationTagEnd = atSymbolPosition + location.name.length + 1; // +1 for the @ symbol
+            
+            // Store location text for processing when form is submitted
+            $('#location_text').val('@' + location.name);
+            
+            // Update character count
+            const remaining = 140 - newText.length;
+            charCount.text(remaining);
+            
+            // Hide dropdown
+            locationDropdown.hide();
+            
+            // Show small map preview
+            initSmallMapPreview(location.latitude, location.longitude);
+        }
+        
+        // Function to initialize small map preview
+        function initSmallMapPreview(lat, lng) {
+            $('#small-map-preview').show();
+            
+            if (!smallMapPreview) {
+                smallMapPreview = L.map('small-map-preview').setView([lat, lng], 13);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: ''
+                }).addTo(smallMapPreview);
+                
+                // Add marker
+                L.marker([lat, lng]).addTo(smallMapPreview);
+                
+                // Disable interaction
+                smallMapPreview.dragging.disable();
+                smallMapPreview.touchZoom.disable();
+                smallMapPreview.doubleClickZoom.disable();
+                smallMapPreview.scrollWheelZoom.disable();
+            } else {
+                smallMapPreview.setView([lat, lng], 13);
+                
+                // Clear existing markers
+                smallMapPreview.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker) {
+                        smallMapPreview.removeLayer(layer);
+                    }
+                });
+                
+                // Add new marker
+                L.marker([lat, lng]).addTo(smallMapPreview);
+            }
+        }
         
         // Initialize the map in the modal
         let map;
         let marker;
-        let selectedLocation = {
-            name: '',
-            lat: 0,
-            lng: 0
-        };
         
         // Initialize the map when the modal is shown
         $('#locationModal').on('shown.bs.modal', function() {
@@ -371,6 +617,27 @@
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 }).addTo(map);
                 
+                // Add click handler to the map
+                map.on('click', function(e) {
+                    const lat = e.latlng.lat;
+                    const lng = e.latlng.lng;
+                    
+                    if (marker) {
+                        marker.setLatLng([lat, lng]);
+                    } else {
+                        marker = L.marker([lat, lng], {draggable: true}).addTo(map);
+                        
+                        // Update location on marker drag
+                        marker.on('dragend', function() {
+                            const pos = marker.getLatLng();
+                            reverseGeocode(pos.lat, pos.lng);
+                        });
+                    }
+                    
+                    // Get location name via reverse geocoding
+                    reverseGeocode(lat, lng);
+                });
+                
                 // Try to get user's location
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(function(position) {
@@ -379,13 +646,20 @@
                         
                         map.setView([userLat, userLng], 13);
                         
+                        // Add marker at user location
                         if (marker) {
                             marker.setLatLng([userLat, userLng]);
                         } else {
                             marker = L.marker([userLat, userLng], {draggable: true}).addTo(map);
+                            
+                            // Update location on marker drag
+                            marker.on('dragend', function() {
+                                const pos = marker.getLatLng();
+                                reverseGeocode(pos.lat, pos.lng);
+                            });
                         }
                         
-                        // Reverse geocode to get location name
+                        // Get location name
                         reverseGeocode(userLat, userLng);
                     });
                 }
@@ -417,46 +691,99 @@
             fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
                 .then(response => response.json())
                 .then(data => {
-                    const locationName = data.display_name || `Location at ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-                    selectedLocation = {
-                        name: locationName,
-                        lat: lat,
-                        lng: lng
-                    };
+                    const locationName = data.display_name || `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
                     
-                    // Update marker popup
-                    if (marker) {
-                        marker.bindPopup(locationName).openPopup();
-                    }
+                    // Update the selected location display
+                    $('#selected-location-display').text(locationName);
                 })
                 .catch(error => {
                     console.error('Error during reverse geocoding:', error);
-                    selectedLocation = {
-                        name: `Location at ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-                        lat: lat,
-                        lng: lng
-                    };
+                    const locationName = `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
                     
-                    // Update marker popup
-                    if (marker) {
-                        marker.bindPopup(selectedLocation.name).openPopup();
-                    }
+                    // Update the selected location display even on error
+                    $('#selected-location-display').text(locationName);
                 });
         }
         
-        // Handle location selection
+        // Search button click handler
+        $('#search-button').on('click', function() {
+            searchLocation();
+        });
+        
+        // Enter key in search field
+        $('#location-search').on('keypress', function(e) {
+            if (e.which === 13) {
+                e.preventDefault();
+                searchLocation();
+            }
+        });
+        
+        // Function to search for location
+        function searchLocation() {
+            const searchQuery = $('#location-search').val();
+            
+            if (searchQuery) {
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.length > 0) {
+                            const result = data[0];
+                            const lat = parseFloat(result.lat);
+                            const lng = parseFloat(result.lon);
+                            
+                            // Update map view
+                            map.setView([lat, lng], 13);
+                            
+                            // Update or create marker
+                            if (marker) {
+                                marker.setLatLng([lat, lng]);
+                            } else {
+                                marker = L.marker([lat, lng], {draggable: true}).addTo(map);
+                                
+                                // Update location on marker drag
+                                marker.on('dragend', function() {
+                                    const pos = marker.getLatLng();
+                                    reverseGeocode(pos.lat, pos.lng);
+                                });
+                            }
+                            
+                            // Get location name
+                            reverseGeocode(lat, lng);
+                        } else {
+                            alert('No results found for this location.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error searching for location:', error);
+                        alert('Error searching for location. Please try again.');
+                    });
+            }
+        }
+        
+        // Handle location selection from modal
         $('#select-location').on('click', function() {
-            if (selectedLocation.name) {
-                // Update the location input and hidden fields
-                $('.location-input').html(`<i class="bi bi-geo-alt"></i> ${selectedLocation.name.substring(0, 30)}...`);
-                $('#location_name').val(selectedLocation.name);
-                $('#latitude').val(selectedLocation.lat);
-                $('#longitude').val(selectedLocation.lng);
+            if (marker) {
+                const position = marker.getLatLng();
+                const locationName = $('#selected-location-display').text();
                 
-                // Enable the post button if text is not empty
-                if (textArea.val().length > 0) {
-                    postButton.prop('disabled', false);
-                }
+                // Select the location
+                selectLocation({
+                    name: locationName,
+                    latitude: position.lat,
+                    longitude: position.lng
+                });
+                
+                // Close the modal
+                $('#locationModal').modal('hide');
+            }
+        });
+        
+        // Form submission handling
+        $('#post-form').on('submit', function(e) {
+            // Only submit if we have location data
+            if (!$('#location_name').val()) {
+                e.preventDefault();
+                alert('Please add a location using the @ symbol (e.g., @Raja Ampat)');
             }
         });
         

@@ -29,6 +29,19 @@
             {% endif %}
         </div>
     </div>
+    
+    <!-- Search Bar -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="input-group">
+                <input type="text" id="location-search" class="form-control" placeholder="Search for a location...">
+                <button class="btn btn-primary" type="button" id="search-button">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </div>
+            <div id="search-results" class="mt-2"></div>
+        </div>
+    </div>
 
     <div class="row">
         <div class="col-12">
@@ -92,6 +105,106 @@ $(document).ready(function() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
+    
+    // Initialize search marker (for search results)
+    var searchMarker = null;
+    
+    // Search functionality
+    $('#search-button').on('click', function() {
+        searchLocation();
+    });
+    
+    // Search on Enter key
+    $('#location-search').on('keypress', function(e) {
+        if (e.which === 13) { // Enter key
+            e.preventDefault();
+            searchLocation();
+        }
+    });
+    
+    // Function to search for a location
+    function searchLocation() {
+        const searchQuery = $('#location-search').val().trim();
+        if (!searchQuery) return;
+        
+        // Show loading indicator
+        $('#search-results').html('<div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div> Searching...');
+        
+        // Use Nominatim for geocoding
+        $.ajax({
+            url: `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`,
+            type: 'GET',
+            dataType: 'json',
+            success: function(data) {
+                if (data.length > 0) {
+                    // Clear previous results
+                    $('#search-results').empty();
+                    
+                    // Show top 3 results
+                    const resultsToShow = Math.min(data.length, 3);
+                    
+                    for (let i = 0; i < resultsToShow; i++) {
+                        const result = data[i];
+                        const resultHtml = `
+                            <div class="card mb-2">
+                                <div class="card-body py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-bold">${result.display_name.split(',').slice(0, 2).join(',')}</div>
+                                            <div class="small text-muted">${result.type}</div>
+                                        </div>
+                                        <button class="btn btn-sm btn-outline-primary show-on-map" 
+                                                data-lat="${result.lat}" data-lon="${result.lon}" data-name="${result.display_name}">
+                                            Show on map
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        $('#search-results').append(resultHtml);
+                    }
+                    
+                    // Handle clicking on a result
+                    $('.show-on-map').on('click', function() {
+                        const lat = parseFloat($(this).data('lat'));
+                        const lon = parseFloat($(this).data('lon'));
+                        const name = $(this).data('name');
+                        
+                        // Remove previous search marker if it exists
+                        if (searchMarker) {
+                            map.removeLayer(searchMarker);
+                        }
+                        
+                        // Create new marker
+                        searchMarker = L.marker([lat, lon], {
+                            icon: L.divIcon({
+                                className: 'search-marker',
+                                html: '<div style="background-color:#e74c3c; width:12px; height:12px; border-radius:50%; border:2px solid white;"></div>',
+                                iconSize: [16, 16],
+                                iconAnchor: [8, 8]
+                            })
+                        }).addTo(map);
+                        
+                        searchMarker.bindPopup(`<strong>Search Result</strong><br>${name}`).openPopup();
+                        
+                        // Center map on the result
+                        map.setView([lat, lon], 13);
+                    });
+                    
+                    // If we have results, automatically show the first one
+                    if (resultsToShow > 0) {
+                        $('.show-on-map').first().trigger('click');
+                    }
+                } else {
+                    $('#search-results').html('<div class="alert alert-warning py-2">No locations found. Try a different search term.</div>');
+                }
+            },
+            error: function() {
+                $('#search-results').html('<div class="alert alert-danger py-2">Error searching for location. Please try again.</div>');
+            }
+        });
+    }
     
     // Array to store all markers for bounds calculation
     var allMarkers = [];

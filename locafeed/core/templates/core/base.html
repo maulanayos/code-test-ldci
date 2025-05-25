@@ -29,10 +29,37 @@
         #map {
             height: 100%;
         }
+        .post-avatar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #1DA1F2;
+            color: white;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
         .error-message {
             color: #dc3545;
             font-size: 0.9rem;
             margin-top: 0.25rem;
+        }
+        .location-tag {
+            display: inline-block;
+            background-color: #eaf5fd;
+            color: #1DA1F2;
+            border-radius: 16px;
+            padding: 0 8px;
+            margin: 0 2px;
+            font-weight: 500;
+            text-decoration: none;
+        }
+        .location-tag:hover {
+            background-color: #d8effc;
+            color: #0d8bd4;
+            text-decoration: none;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -50,9 +77,6 @@
                     {% if user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'api_docs' %}">API</a>
                     </li>
                     {% endif %}
                 </ul>
