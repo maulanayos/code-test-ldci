@@ -76,9 +76,7 @@ flowchart TD
     B -->|Click on Location Tag| D[Map View]
     D -->|Back Button| B
     B -->|Profile Link| E[User Profile]
-    E -->|Edit Profile| E
     E -->|Back Button| B
-    D -->|Search Location| D
 ```
 
 ## System Architecture
