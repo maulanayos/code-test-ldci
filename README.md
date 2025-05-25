@@ -76,9 +76,7 @@ flowchart TD
     B -->|Click on Location Tag| D[Map View]
     D -->|Back Button| B
     B -->|Profile Link| E[User Profile]
-    E -->|Edit Profile| E
     E -->|Back Button| B
-    D -->|Search Location| D
 ```
 
 ## System Architecture
@@ -201,23 +199,32 @@ flowchart LR
    import sys
    
    # Add your project directory to the sys.path
-   path = '/home/yourusername/locafeed'
-   if path not in sys.path:
-       sys.path.append(path)
+   project_path = '/home/yourusername/locafeed'
+   if project_path not in sys.path:
+       sys.path.insert(0, project_path)
    
-   # Add the virtualenv site-packages
-   venv_path = '/home/yourusername/locafeed/.venv'
-   site_packages = os.path.join(venv_path, 'lib', 'python3.8', 'site-packages')
-   sys.path.insert(0, site_packages)
+   # Find the poetry-generated virtual environment
+   # The .venv is inside the project directory when using poetry config virtualenvs.in-project true
+   venv_path = os.path.join(project_path, '.venv')
+   
+   # Detect Python version dynamically
+   python_version = None
+   for dir_name in os.listdir(os.path.join(venv_path, 'lib')):
+       if dir_name.startswith('python'):
+           python_version = dir_name
+           break
+   
+   if not python_version:
+       raise ImportError("Could not detect Python version in the virtual environment")
+   
+   # Add site-packages to path
+   site_packages = os.path.join(venv_path, 'lib', python_version, 'site-packages')
+   if site_packages not in sys.path:
+       sys.path.insert(0, site_packages)
    
    # Set environment variables
    os.environ['DJANGO_SETTINGS_MODULE'] = 'locafeed.settings'
    os.environ['DJANGO_DEBUG'] = 'False'
-   
-   # Activate your virtual environment
-   activate_this = os.path.join(venv_path, 'bin', 'activate_this.py')
-   with open(activate_this) as file_:
-       exec(file_.read(), dict(__file__=activate_this))
    
    # Import Django
    from django.core.wsgi import get_wsgi_application
