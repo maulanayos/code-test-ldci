@@ -35,7 +35,7 @@
                     
                     <div class="mb-3">
                         <label for="id_password" class="form-label">Password</label>
-                        <input type="password" name="password" id="id_password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" required>
+                        <input type="password" name="password" id="id_password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" autocomplete="current-password" autocorrect="off" autocapitalize="off" spellcheck="false" required>
                         {% if form.password.errors %}
                         <div class="invalid-feedback">
                             {% for error in form.password.errors %}
