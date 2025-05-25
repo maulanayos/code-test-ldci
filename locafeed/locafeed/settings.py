@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-y$ka#fshijlkl)xx#p4@_p=z06vv1((e#f!v!ot#@y_xd7(r^+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['mxmyos.pythonanywhere.com', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['mxmyos.pythonanywhere.com', '127.0.0.1', 'localhost'] # Add your domain name here
 
 
 # Application definition
@@ -128,6 +128,11 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Additional locations of static files
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 # Media files (User uploads)
 MEDIA_URL = '/media/'
